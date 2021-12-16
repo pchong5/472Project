@@ -1,0 +1,362 @@
+---
+title: "472 Project"
+author: "Ali Almarbooei"
+date: "11/05/2021"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load the Lib and data
+```{r} 
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(e1071)
+
+```
+
+
+```{r}
+#load the data 
+df = read.csv("aug_train.csv", na.strings=c("","Unspecified"))
+head(df)
+```
+
+
+
+## Explore data
+```{r}
+#Check gender arrangement 
+barplot(table(df$gender),main="Gender",xlab="Gender",ylab="Count",border="red",col="blue",density=10)
+
+```
+```{r}
+
+barplot(table(df$relevent_experience),main="Experience",xlab="Experience Level",ylab="Count",border="red",col="blue",density=10)
+
+```
+```{r}
+
+barplot(table(df$enrolled_university),main="University Enrollment",xlab="University Enrollment",ylab="Count",border="red",col="blue",density=5)
+
+```
+```{r}
+
+barplot(table(df$education_level),main="Education",xlab="Education",ylab="Count",border="red",col="blue",density=5)
+
+```
+```{r}
+
+barplot(table(df$major_discipline),main="Major Discipline",xlab="Discipline",ylab="Count",border="red",col="blue",density=5)
+
+```
+
+```{r}
+barplot(table(df$last_new_job),main="Major Discipline",xlab="Discipline",ylab="Count",border="black",col="red",density=5)
+```
+```{r}
+barplot(table(df$company_size),main="Company Size",xlab="size",ylab="Count",border="black",col="red",density=5)
+```
+```{r}
+barplot(table(df$company_type),main="Company Type",xlab="Company type",ylab="Count",border="black",col="red",density=5)
+```
+
+## Unspecified and Factors
+```{r}
+## Replace to missing value with unspecified
+df = df %>%
+  mutate(gender = replace(gender,
+                          is.na(gender),
+                          "Unspecified"),
+         experience = replace(experience,
+                              is.na(experience),
+                              "Unspecified"),
+         major_discipline = replace(major_discipline,
+                                    is.na(major_discipline),
+                                    "Unspecified"),
+         education_level = replace(education_level,
+                                   is.na(education_level),
+                                   "Unspecified"),
+         enrolled_university = replace(enrolled_university,
+                                       is.na(enrolled_university),
+                                       "Unspecified"),
+         company_size = replace(company_size,
+                                       is.na(company_size),
+                                       "Unspecified"),
+         company_type = replace(company_type,
+                                       is.na(company_type),
+                                       "Unspecified"),
+         last_new_job = replace(last_new_job, 
+                                is.na(last_new_job),
+                                "Unspecified"))
+head(df)
+```
+
+```{r}
+#changing data from character to factors
+df = subset(df, select = -c(enrollee_id))
+# Change Factor
+df$gender = as.factor(df$gender)
+df$last_new_job = as.factor(df$last_new_job)
+df$relevent_experience = as.factor(df$relevent_experience)
+df$experience =as.factor(df$experience)
+df$major_discipline = as.factor(df$major_discipline)
+df$enrolled_university = as.factor(df$enrolled_university)
+#df$company_size = as.factor(df$company_size)
+df$company_type = as.factor(df$company_type)
+df$target = as.factor(df$target)
+
+summary(df)
+```
+
+
+
+## encode data 
+```{r}
+#function to encode the data
+encodeData <- function(x, order = unique(x)) {
+  x <- as.numeric(factor(x, levels = order, exclude = NULL))
+  x
+}
+```
+
+```{r}
+
+```
+
+## view the distribution based on new numerical categories
+```{r}
+# print("Gender: ")
+summary(as.factor(df$gender))
+print("Last new Job")
+summary(as.factor(df$last_new_job))
+print("Education Level")
+summary(as.factor(df$education_level))
+print("Experience: ")
+summary(as.factor(df$experience))
+print("Relevant Experience")
+summary(as.factor(df$relevent_experience))
+print("Major Discipline: ")
+summary(as.factor(df$major_discipline))
+print("Enrolled University?")
+summary(as.factor(df$enrolled_university))
+print("Company size: ")
+summary(as.factor(df$company_size))
+print("Company type")
+summary(as.factor(df$company_type))
+```
+in most of the variables the ranking has been done based on the size of each category. the one with large category comes first
+
+```{r}
+#factorize categorical data in specific order
+df$education_level = dplyr::case_when(df$education_level=="Primary School"~1,
+                                              df$education_level=="High School"~2,
+                                              df$education_level=="Graduate"~3,
+                                              df$education_level=="Masters"~4,
+                                              df$education_level=="Phd"~5,
+                                              df$education_level=="Unspecified"~6,
+                                              )
+
+df$company_size = dplyr::case_when(df$company_size=="Unspecified"~0,
+                                  df$company_size=="<10"~1,
+                                  df$company_size=="10/49"~2,
+                                  df$company_size=="50-99"~3,
+                                  df$company_size=="100-500"~4,
+                                  df$company_size=="500-999"~5,
+                                  df$company_size=="1000-4999"~6,
+                                  df$company_size=="5000-9999"~7,
+                                  df$company_size=="10000+"~8,)
+```
+
+```{r}
+#since the city has many categorical values it cannot be factored. so we remove it 
+df$city=NULL
+
+```
+
+
+
+
+
+#Split data into training and testing datasets
+```{r}
+n = nrow(df)
+train_set <- 1:(n * 0.6)
+train <- df[train_set,]     #60% of data for training 
+test <- df[-train_set,]     #40% of data for testing
+```
+
+## Create a logistical regression model
+```{r}
+
+## GLM 
+set.seed(456)
+glm.fit = glm(formula = target ~ ., data = train,family = "binomial")
+summary(glm.fit)
+```
+Based on the above logistic model results there are seven variables that are statistically significant: city development index, gender, relevant_experience, enrolled_university, education_level, company size and company type.
+major_discipline, experience, last_new_job and training hours are not significant for study hence we except them from further study
+
+```{r}
+#calculating confidence interval
+#confint(glm.fit)
+```
+
+
+## Creating model using significant variables ------------------ 6 variables ---------------------------------
+```{r}
+my4model <- glm(target ~ city_development_index + experience + training_hours + gender + company_size + company_type, data = train, family = "binomial")
+summary(my4model)
+```
+
+```{r}
+#confidence interval
+#confint(my4model)
+```
+
+
+### checking if the predictor variable are significant
+```{r}
+#Wald test
+library(aod)
+wald.test(b = coef(my4model), Sigma = vcov(my4model), Terms = 4:6)
+```
+## -----------------------------------------------------------------------------
+
+
+##--------------------------- Histograms ---------------------------------------
+```{r}
+Target_num = as.numeric(train$target) - 1
+library(popbio)
+```
+
+## Training Hours 
+```{r}
+logi.hist.plot(as.numeric(train$training_hours), Target_num, logi.mod = 1, type = "hist",
+  boxp = FALSE, rug = FALSE, ylabel = "Job Change Probability",
+  ylabel2 = "", xlabel = "Hours", mainlabel = "Training Hours", las.h = 1,  counts = TRUE, col = " light blue")
+```
+Most of the jobs have less than 150 training hours, it happen that these jobs also have larger number of those who want to change their job
+There is slight decrease in probability to change job  as training hours increases. 
+
+## City Developmenx index
+```{r}
+logi.hist.plot(train$city_development_index, Target_num, logi.mod = 1, type = "hist",
+  boxp = FALSE, rug = FALSE, ylabel = "Job Change Probability",
+  ylabel2 = " ", xlabel = " index", mainlabel = " City Development Index", las.h = 1,
+  counts = TRUE, col = "light blue")
+```
+Most people lives in cities with higher development as it can be seen from the proportion of people in higher city index 
+However, the probability of people wanting to change descreases with increase in city development index
+
+## experience
+```{r}
+experience_num1 = as.numeric(train$experience) 
+
+logi.hist.plot(experience_num1, Target_num, logi.mod = 1, type = "hist",
+  boxp = FALSE, rug = FALSE, ylabel = "Job Change Probability",
+  ylabel2 = " ", xlabel = " Years", mainlabel = " experience", las.h = 1,
+  counts = TRUE, col = "blue") 
+```
+the is high number of people without experience, there is also high number of people who have experience of between 10 and 22 years
+the probability to change job increases slightly with increase in years of experience
+
+## education level 
+```{r}
+education_level1 = train$education_level
+logi.hist.plot(education_level1, Target_num, logi.mod = 1, type = "hist",
+  boxp = FALSE, rug = FALSE, ylabel = "Job Change Probability",
+  ylabel2 = " ", xlabel = "1:Primary School 2:Highschool 3:Graduate   4: Masters     5: PHD   6:Unspecified", mainlabel = " Education Level", las.h = 1,
+  counts = TRUE, col = "light blue")
+```
+Education level does not seem to be a big factor of people wanting to change their current job
+
+
+## company size 
+```{r}
+
+logi.hist.plot(train$company_size, Target_num, logi.mod = 1, type = "hist",
+  boxp = FALSE, rug = FALSE, ylabel = "Job Change Probability",
+  ylabel2 = " ", xlabel = " size", mainlabel = " Company size", las.h = 1,
+  counts = TRUE, col = "light blue") 
+
+```
+people is small companies tends to want to want to move to other company
+##------------------------------------------------------------------------------
+##?logi.hist.plot 
+
+
+
+## Accuracy 
+```{r}
+# Check for accuracy
+prob = predict(glm.fit, test,type = "response") 
+glm.pred <- rep(0, length(prob))
+glm.pred[prob > 0.5] <- 1
+
+mean(glm.pred == test$target)
+
+```
+```{r}
+library(caret)
+cm <- confusionMatrix(as.factor(glm.pred),test$target)
+```
+
+```{r}
+draw_confusion_matrix <- function(cm) {
+
+  layout(matrix(c(1,1,2)))
+  par(mar=c(2,2,2,2))
+  plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+  title('CONFUSION MATRIX', cex.main=2)
+
+  # create the matrix 
+  rect(150, 430, 240, 370, col='blue')
+  text(195, 435, 'Positive (Change job)', cex=1.2)
+  rect(250, 430, 340, 370, col='purple')
+  text(295, 435, 'Negative (Keep current Job)', cex=1.2)
+  text(125, 370, 'Predicted', cex=1.3, srt=90, font=2)
+  text(245, 450, 'Actual', cex=1.3, font=2)
+  rect(150, 305, 240, 365, col='purple')
+  rect(250, 305, 340, 365, col='blue')
+  text(140, 400, 'Positive', cex=1.2, srt=90)
+  text(140, 335, 'Negative', cex=1.2, srt=90)
+
+  # add in the cm results 
+  res <- cm$table
+  text(195, 400, res[1], cex=1.6, font=2, col='white')
+  text(195, 335, res[2], cex=1.6, font=2, col='white')
+  text(295, 400, res[3], cex=1.6, font=2, col='white')
+  text(295, 335, res[4], cex=1.6, font=2, col='white')
+  
+  # add in the specifics 
+  plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "DETAILS", xaxt='n', yaxt='n')
+  text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+  text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+  text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+  text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+  text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+  text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+  text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+  text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+  text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+  text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+  # add in the accuracy information 
+  text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+  text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+  text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+  text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+  
+}  
+```
+
+```{r}
+draw_confusion_matrix(cm)
+```
+# code draw confusion matrix function adopted from https://newbedev.com/r-how-to-visualize-confusion-matrix-using-the-caret-package
+https://stats.idre.ucla.edu/r/dae/logit-regression/
