@@ -1,0 +1,287 @@
+---
+title: "472 Project Random Forest Code"
+author: "Arik Roberts"
+date: "December 15, 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include = FALSE}
+library(dplyr)
+library(randomForest)
+library(DT)
+library(caret)
+library(future)
+library(ggplot2)
+```
+
+```{r include = FALSE}
+# read in data
+data <- read.csv("aug_train.csv", header = TRUE)
+```
+
+# Data Cleaning
+
+Below we make 'unspecified' the value for all empty data points and NA results for each variable
+
+```{r include = FALSE}
+# gender
+unique(data$gender)
+data$gender[data$gender == ""] <- "unspecified"
+data <- data[which(data$gender %in% c("Male","Female","Other", "unspecified")),]
+# change to factor variable
+data$gender <- as.factor(data$gender)
+nrow(data)
+```
+
+```{r include = FALSE}
+# experience
+unique(data$relevent_experience)
+# change to factor variable
+data$relevent_experience <- as.factor(data$relevent_experience)
+```
+
+```{r include = FALSE}
+# university enrollment
+unique(data$enrolled_university)
+data$enrolled_university[data$enrolled_university == ""] <- "unspecified"
+data <- data[which(data$enrolled_university %in% c("no_enrollment","Full time course","Part time course", "unspecified")),]
+# change to factor variable
+data$enrolled_university <- as.factor(data$enrolled_university)
+nrow(data)
+```
+
+```{r include = FALSE}
+# education level
+unique(data$education_level)
+data$education_level[data$education_level == ""] <- "unspecified"
+data <- data[which(data$education_level %in% c("Graduate","Masters","High School","Primary School", "Phd", "unspecified")),]
+# change to factor variable
+data$education_level <- as.factor(data$education_level)
+nrow(data)
+```
+
+```{r include = FALSE}
+# major in college
+unique(data$major_discipline)
+data$major_discipline[data$major_discipline == ""] <- "unspecified"
+data <- data[which(data$major_discipline %in% c("STEM","Business Degree","Arts","Humanities","No Major","Other", "unspecified")),]
+# change to factor variable
+data$major_discipline <- as.factor(data$major_discipline)
+nrow(data)
+```
+
+```{r include = FALSE}
+# experience
+unique(data$experience)
+# have 21 be considered >20 and 0 be considered <1
+data$experience[data$experience == ">20"] <- "21"
+data$experience[data$experience == "<1"] <- "0"
+data <- data[which(data$experience %in% c("0","1","2","3","4","5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21")),]
+# change to numeric variable
+data$experience <- as.numeric(data$experience)
+nrow(data)
+```
+
+```{r include = FALSE}
+# company size
+unique(data$company_size)
+data$company_size[data$company_size == ""] <- "unspecified"
+data <- data[which(data$company_size %in% c("<10","10/49","50-99","100-500","500-999","1000-4999","5000-9999", "10000+", "unspecified")),]
+# change to factor variable
+data$company_size <- as.factor(data$company_size)
+nrow(data)
+```
+
+```{r include = FALSE}
+# company type currently employed
+unique(data$company_type)
+data$company_type[data$company_type == ""] <- "unspecified"
+data <- data[which(data$company_type %in% c("Pvt Ltd","Funded Startup","Early Stage Startup","Other","Public Sector","NGO", "unspecified")),]
+# change to factor variable
+data$company_type <- as.factor(data$company_type)
+nrow(data)
+```
+
+```{r include = FALSE}
+# last new job in years
+unique(data$last_new_job)
+data$last_new_job[data$last_new_job == ""] <- "unspecified"
+# change >4 to 5 and never to 0
+data$last_new_job[data$last_new_job == ">4"] <- "5"
+data$last_new_job[data$last_new_job == "never"] <- "0"
+data <- data[which(data$last_new_job %in% c("0","1","2","3","4","5", "unspecified")),]
+# change to factor variable
+data$last_new_job <- as.factor(data$last_new_job)
+# change city to factor variable
+data$city <- as.factor(data$city)
+# change target to factor variable
+data$target <- as.factor(data$target)
+nrow(data)
+```
+
+Next we exclude all observations with 3 or more 'unspecified' values
+
+```{r include = TRUE}
+# store sums
+store <- rep(NA, nrow(data))
+# for loop that goes through each row and sums number of unspecified values per observation
+for(i in 1:nrow(data)) {
+    store[i] <- sum(data[i,] == "unspecified")
+}
+# new variable that stores only data points that have less than 3 'unspecified'
+temp <- store < 3
+# data is now only observations with <3 'unspecified' values
+pdata <- data[temp,]
+# new dataframe excluding city and enrolled id
+fdata <- pdata[,3:14]
+```
+
+## Total number of observations for our final set of data after cleaning
+
+```{r include = TRUE}
+# number of observations for our final set of data
+nrow(fdata)
+```
+
+# Establish a 80% training set and 20% test
+
+```{r include = TRUE}
+smp_size <- floor(.8 * nrow(fdata))
+
+set.seed(472)
+trythis <- sample(seq_len(nrow(fdata)), size = smp_size)
+
+train <- fdata[trythis,]
+test <- fdata[-trythis,]
+```
+
+# Random Forest
+
+```{r include = TRUE}
+# custom random forest
+custom_rf <- list(type = "Classification", library = "randomForest", loop = NULL)
+custom_rf$parameters <- data.frame(parameter = c("mtry", "ntree"), class = rep("numeric", 2), label = c("mtry", "ntree"))
+custom_rf$grid <- function(x, y, len = NULL, search = "grid") {}
+custom_rf$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+  randomForest(x, y, mtry = param$mtry, ntree = param$ntree, ...)
+}
+custom_rf$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata)
+custom_rf$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata, type = "prob")
+custom_rf$sort <- function(x) x[order(x[,1]), ]
+custom_rf$levels <- function(x) x$classes
+```
+
+## Hyperparameter tuning
+
+Tune the hyperparameters of the Random Forests with possible values:
+
+mtry = 3, 5, 7, 9, and 11
+
+ntree = 100, 200, 300, 400, and 500
+
+This allows for a total of 25 different Random Forests being made and evaluated for accuracy
+
+```{r include = TRUE}
+control <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+# hyperparameter for both mtry and ntree
+tunegrid <- expand.grid(.mtry = c(3, 5, 7, 9, 11), .ntree = c(100,200,300,400,500))
+# random forest with training dataset
+rf_default <- train(target ~ ., data = train, method = custom_rf, metric =  "Accuracy",  tuneGrid = tunegrid, trControl = control)
+```
+
+```{r include = TRUE}
+# results from the 25 training random forests
+rf_default$results
+# best hyperparameters for accuracy from all 25 training random forests
+rf_default$bestTune
+# range of accuracy from all 25 random forests
+max(rf_default$results$Accuracy) - min(rf_default$results$Accuracy)
+```
+## Accuracy Plot
+
+```{r fig.width=4}
+# Accuracy plot for the different hyperparameters
+plot(rf_default, main = "Accuracy v. mtry")
+```
+
+## Random Forest with best hyperparameters
+
+With hyperparameters mtry = 8 and ntree = 300
+
+```{r include = TRUE}
+set.seed(472)
+# random forest with the most accurate hyperparameters
+scary <- randomForest(target ~ ., data = train, mtry = 7, ntree = 300, importance = TRUE)
+scary
+# covariate importance measures
+scary$importance
+```
+
+## Use test dataset to establish how accurate our results are
+
+Misclassification rate and confusion matrix
+
+```{r include = TRUE}
+# predict classification using testing dataset
+set.seed(472)
+y_hat_rf <- predict(scary, test)
+# misclassification rate
+mean(y_hat_rf != test$target)
+# confusion matrix
+table(y_hat_rf, true_test = test$target)
+```
+
+## Second Random Forest
+
+We used a 60% cutoff for classifying sample to majority set (not looking for a job) to control for the imbalance of our response variable.
+
+60% was used as it was shown to be the most optimal as it classified each outcome proportionally the correct amount of times.
+
+```{r include = TRUE}
+# another random forest with 60% cutoff
+# attempted cutoff from 10% to 90% and found 60% most optimal
+set.seed(472)
+scary2 <- randomForest(target ~ ., data = train, mtry = 7, ntree = 300, importance = TRUE, cutoff = c(1-.4, .4))
+importance(scary2)
+
+```
+
+Misclassification rate and confusion matrix
+
+```{r include = TRUE}
+# predict classification using testing set
+set.seed(472)
+y_hat_rf2 <- predict(scary2, test)
+# misclassification rate
+mean(y_hat_rf2 != test$target)
+# confusion matrix
+table(y_hat_rf2, true_test = test$target)
+```
+
+## Variable Importance Plots
+
+```{r include = TRUE}
+# variable importance plots for both random forests
+varImpPlot(scary, main = "Variable Importance with No Cutoff")
+varImpPlot(scary2, main = "Variable Importance with 60% Cutoff")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
